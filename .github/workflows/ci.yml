@@ -1,0 +1,32 @@
+# CI for every pull request into main and every push to main (ADR 0013 applies here too): the site
+# assembly and credits tests, the runtime-format allowlist on git (text sources only, no binaries), and
+# a syntax check of the post-deploy smoke script. Read-only; nothing deploys from here.
+name: CI
+
+on:
+  pull_request: { branches: [main] }
+  push: { branches: [main] }
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+      - name: Tests (site assembly, allowlist, credits)
+        run: npm test
+      - name: Git holds text sources only
+        run: node scripts/allowlist.mjs --git
+      - name: Smoke script parses
+        run: bash -n scripts/smoke.sh

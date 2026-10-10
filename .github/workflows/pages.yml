@@ -1,0 +1,83 @@
+# Deploys the runtime site https://kudratsingh.github.io/jungle-world/ when a release is published
+# (kudratsingh/jungle-assets' release workflow publishes them) or by hand to redeploy (ADR 0014, decision 11).
+#
+#   build   downloads the newest two releases' assets; lays out files/<name>.<hash>.<ext> for both side
+#           by side, releases/<tag>.json and credits.json / credits.html (noindex) for both; checks every
+#           file against its manifest and the runtime-format allowlist; uploads the Pages artifact.
+#   deploy  actions/deploy-pages with the built-in GITHUB_TOKEN.
+#   verify  the curl checks on the real origin (gzip, CORS and Range for .glb; Range and no encoding for
+#           .ktx2; credits.html 200).
+#
+# The github-pages environment allows deployments from main and from tags matching world-*.
+name: Pages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+      - name: Download the newest two releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/download-releases.mjs --dest releases-in --count 2
+      - name: Lay out files, manifests and credits for both releases
+        run: node scripts/assemble-site.mjs --releases releases-in --out _site
+      - name: Runtime-format allowlist
+        run: node scripts/allowlist.mjs --dir _site
+      - name: Summary
+        run: |
+          {
+            echo "### Site contents"
+            echo
+            echo '```'
+            (cd _site && find . -type f -printf '%10s  %p\n' | sort -k2)
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    name: deploy
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
+
+  verify:
+    name: verify
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+      - name: curl checks on the real origin
+        run: bash scripts/smoke.sh https://kudratsingh.github.io/jungle-world
