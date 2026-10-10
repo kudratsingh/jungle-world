@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { checkGitFiles, checkSiteFiles, listFiles } from "./allowlist.mjs";
 import { assembleSite } from "./assemble-site.mjs";
-import { pickReleases } from "./download-releases.mjs";
+import { pickReleases, waitForNewest } from "./download-releases.mjs";
 
 const root = await mkdtemp(join(tmpdir(), "jungle-world-test-"));
 after(() => rm(root, { recursive: true, force: true }));
@@ -112,4 +112,53 @@ test("git holds text sources only", async () => {
   await writeFile(join(linkDir, "credits.json"), "{}");
   await symlink(join(linkDir, "credits.json"), join(linkDir, "credits2.json"));
   assert.deepEqual((await listFiles(linkDir)).links, ["credits2.json"]);
+});
+
+test("the build waits for the dispatched release to be the newest, and fails if it never is", async () => {
+  const older = { tag_name: "world-0", published_at: "2026-10-10T10:00:00Z", draft: false, prerelease: false };
+  const newer = { tag_name: "world-1", published_at: "2026-10-11T10:00:00Z", draft: false, prerelease: false };
+  const lists = [[older], [older], [older, newer]];
+  const sleeps = [];
+  const tags = await waitForNewest({ list: async () => lists.shift() ?? [older, newer], count: 2, expect: "world-1", sleep: async (ms) => void sleeps.push(ms) });
+  assert.deepEqual(tags, ["world-1", "world-0"]);
+  assert.equal(sleeps.length, 2);
+  await assert.rejects(waitForNewest({ list: async () => [older], count: 2, expect: "world-1", attempts: 2, sleep: async () => {} }), /newest published release is world-0, not world-1/);
+  assert.deepEqual(await waitForNewest({ list: async () => [older], count: 2 }), ["world-0"]);
+});
+
+/** A valid one-file release, then `mutate(manifest)` rewrites its manifest before assembly. */
+async function assembleMutated(name, mutate) {
+  const dir = join(root, name);
+  const manifest = await release(dir, "world-0", [["fern_02", "glb", "fern bytes", licence("Fern 02")]]);
+  mutate(manifest);
+  await writeFile(join(dir, "world-0", "world-manifest.json"), JSON.stringify(manifest));
+  await writeFile(join(dir, "order.json"), JSON.stringify(["world-0"]));
+  return assembleSite({ releasesDir: dir, outDir: join(root, `${name}-site`) });
+}
+
+test("manifests with unsafe or wrong file names are rejected before anything is copied", async () => {
+  const cases = [
+    ["traversal", "../escape.aaaaaaaaaaaa.glb", /name must be/],
+    ["unhashed", "fern_02.glb", /name must be/],
+    ["wrong-hash", "fern_02.ffffffffffff.glb", /does not embed its hash/],
+    ["json-name", "notes.aaaaaaaaaaaa.json", /name must be/],
+    ["html-name", "page.aaaaaaaaaaaa.html", /name must be/],
+  ];
+  for (const [label, name, pattern] of cases) {
+    await assert.rejects(
+      assembleMutated(label, (m) => {
+        m.files[0].name = name;
+        if (label !== "wrong-hash") m.files[0].hash = "a".repeat(64);
+      }),
+      pattern,
+      label,
+    );
+  }
+});
+
+test("a manifest for another release, or with unknown fields, is rejected", async () => {
+  await assert.rejects(assembleMutated("other-release", (m) => (m.release = "world-9")), /manifest\.release is world-9, not world-0/);
+  await assert.rejects(assembleMutated("unknown-top", (m) => (m.extra = true)), /unknown field extra/);
+  await assert.rejects(assembleMutated("unknown-file", (m) => (m.files[0].url = "/x")), /unknown field url/);
+  await assert.rejects(assembleMutated("unknown-licence", (m) => (m.files[0].licence.note = "x")), /licence has unknown field note/);
 });
