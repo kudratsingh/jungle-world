@@ -5,8 +5,9 @@ GitHub Pages at **https://kudratsingh.github.io/jungle-world/** (same origin as 
 decision 11, in `kudratsingh/kudratsingh.github.io`).
 
 This repository holds no assets in git. Its releases (`world-0`, `world-1`, …) carry the content-hashed
-runtime files, built and published by the private pipeline `kudratsingh/jungle-assets`; publishing a
-release runs the Pages workflow, which deploys the current and the previous release side by side.
+runtime files, built and published by the private pipeline `kudratsingh/jungle-assets`, whose release
+workflow then sends a `repository_dispatch` (`world-release`, with the tag). That runs the Pages workflow
+from `main`, which deploys the current and the previous release side by side.
 
 ## What the site serves
 
@@ -32,7 +33,12 @@ from the release manifests, so they cannot drift from what is served.
 ## How it changes
 
 - Files arrive only through `kudratsingh/jungle-assets`' release workflow; nobody uploads by hand.
+- Only `main`'s workflow and scripts ever deploy: the Pages workflow runs on the dispatch (or by hand),
+  checks out `main`, and the `github-pages` environment accepts deployments from `main` only. A ruleset
+  stops `world-*` tags from being moved or deleted, so a published release stays what it was.
 - Code here (the Pages workflow and its scripts) changes by pull request with green CI; `main` is
   protected (pull request and CI required).
+- Redeploy by hand: `gh workflow run pages.yml --repo kudratsingh/jungle-world` (optionally `-f tag=world-N`
+  to wait for that release and check it).
 - `npm test` runs the tests (Node's test runner, no dependencies); `node scripts/allowlist.mjs --git`
   confirms git holds text sources only.

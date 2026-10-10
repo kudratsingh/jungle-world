@@ -1,20 +1,28 @@
-# Deploys the runtime site https://kudratsingh.github.io/jungle-world/ when a release is published
-# (kudratsingh/jungle-assets' release workflow publishes them) or by hand to redeploy (ADR 0014, decision 11).
+# Deploys the runtime site https://kudratsingh.github.io/jungle-world/ (ADR 0014, decision 11).
 #
-#   build   downloads the newest two releases' assets; lays out files/<name>.<hash>.<ext> for both side
-#           by side, releases/<tag>.json and credits.json / credits.html (noindex) for both; checks every
-#           file against its manifest and the runtime-format allowlist; uploads the Pages artifact.
+# Triggers: a repository_dispatch `world-release` (payload: the tag) that kudratsingh/jungle-assets'
+# release workflow sends after it publishes a release here, or a manual run to redeploy. Both run main's
+# workflow and check out main, and the github-pages environment accepts deployments from main only, so a
+# world-* tag pushed on any other commit never runs its own scripts; a ruleset keeps world-* tags from
+# being moved or deleted.
+#
+#   build   downloads the newest two releases' assets (waiting until the dispatched tag is the newest);
+#           lays out files/<name>.<hash>.<ext> for both side by side, releases/<tag>.json and
+#           credits.json / credits.html (noindex) for both; checks every file against its manifest and
+#           the runtime-format allowlist; uploads the Pages artifact.
 #   deploy  actions/deploy-pages with the built-in GITHUB_TOKEN.
-#   verify  the curl checks on the real origin (gzip, CORS and Range for .glb; Range and no encoding for
-#           .ktx2; credits.html 200).
-#
-# The github-pages environment allows deployments from main and from tags matching world-*.
+#   verify  the curl checks on the real origin, retried until the site serves the dispatched release.
 name: Pages
 
 on:
-  release:
-    types: [published]
+  repository_dispatch:
+    types: [world-release]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release expected to be the newest (optional; the build and the checks then wait for it)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -25,20 +33,32 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+env:
+  EXPECTED_TAG: ${{ github.event.client_payload.tag || inputs.tag }}
+
 jobs:
   build:
     name: build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
+      - name: Expected release tag is world-<n> or empty
+        run: |
+          if [ -n "${EXPECTED_TAG}" ] && ! [[ "${EXPECTED_TAG}" =~ ^world-[0-9]+$ ]]; then
+            echo "::error::not a world release tag: ${EXPECTED_TAG}"
+            exit 1
+          fi
+          echo "expected newest release: ${EXPECTED_TAG:-any}"
       - uses: actions/checkout@v7
+        with:
+          ref: main
       - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
       - name: Download the newest two releases
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node scripts/download-releases.mjs --dest releases-in --count 2
+        run: node scripts/download-releases.mjs --dest releases-in --count 2 --expect "${EXPECTED_TAG}"
       - name: Lay out files, manifests and credits for both releases
         run: node scripts/assemble-site.mjs --releases releases-in --out _site
       - name: Runtime-format allowlist
@@ -73,9 +93,11 @@ jobs:
     name: verify
     needs: deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: main
       - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
