@@ -1,0 +1,14 @@
+{
+  "name": "jungle-world",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Runtime-only world files for kudratsingh.github.io/jungle-world/ (ADR 0014). No dependencies.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "test": "node --test",
+    "allowlist": "node scripts/allowlist.mjs"
+  }
+}

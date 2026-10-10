@@ -1,0 +1,5 @@
+# Release downloads and the assembled site are build outputs: no binaries in git.
+releases-in/
+_site/
+node_modules/
+.DS_Store
