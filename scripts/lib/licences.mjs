@@ -1,0 +1,13 @@
+// Copy of kudratsingh/jungle-assets pipeline/lib/licences.mjs (names and URLs for credits). Change both.
+
+/** @type {Record<string, { name: string, url: string | null, attribution: boolean }>} */
+export const LICENCES = {
+  "CC0-1.0": { name: "CC0 1.0", url: "https://creativecommons.org/publicdomain/zero/1.0/", attribution: false },
+  "CC-BY-3.0": { name: "CC BY 3.0", url: "https://creativecommons.org/licenses/by/3.0/", attribution: true },
+  "CC-BY-4.0": { name: "CC BY 4.0", url: "https://creativecommons.org/licenses/by/4.0/", attribution: true },
+  "LicenseRef-Paid": { name: "Paid licence", url: null, attribution: false },
+};
+
+export function licenceInfo(id) {
+  return Object.hasOwn(LICENCES, id) ? LICENCES[id] : null;
+}
