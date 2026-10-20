@@ -39,3 +39,17 @@ test("the page is noindex, escapes text and credits every source", () => {
   assert.match(html, /modified/);
   assert.ok(!html.includes("<b>"));
 });
+
+test("own work is credited as 'Own work by Kudrat Singh, generated with <tool> <version>', linking this public repository, with no licence link (ADR 0016)", () => {
+  const own = { title: "EZ-Tree 1.1.0", author: "Kudrat Singh", authorUrl: "https://github.com/kudratsingh", sourceUrl: "https://github.com/kudratsingh/jungle-world", licence: "Own", dateChecked: "2026-10-10", modified: true };
+  const credits = creditsFromManifests([{ release: "world-1", files: [{ id: "cecropia-nw", name: "cecropia_nw.111111111111.glb", licence: own }, { id: "t", name: "t.444444444444.glb", licence: by }] }]);
+  const entry = credits.sources.find((s) => s.licence === "Own");
+  assert.equal(entry.licenceName, "Own work");
+  assert.equal(entry.attributionRequired, false);
+  assert.equal(entry.licenceUrl, undefined);
+  const html = creditsHtml(credits);
+  assert.match(html, /Own work by <a href="https:\/\/github\.com\/kudratsingh">Kudrat Singh<\/a>, generated with <a href="https:\/\/github\.com\/kudratsingh\/jungle-world">EZ-Tree 1\.1\.0<\/a>\./);
+  assert.ok(!html.includes('href="undefined"'));
+  assert.ok(!html.includes("licensed under <a href=\"undefined\""));
+  assert.match(html, /CC BY 4\.0/);
+});
