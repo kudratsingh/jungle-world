@@ -1,6 +1,8 @@
 // Copy of kudratsingh/jungle-assets pipeline/lib/manifest.mjs: the release manifest contract, checked
 // again here before a release's files are deployed. Change both (and the portfolio's
-// src/lib/world/manifest.ts) together.
+// src/lib/world/manifest.ts) together. One difference on purpose: jungle-assets accepts a file's
+// `deliveryPath` (WO-051) for its private manifest; a jungle-world release never carries one, so this copy
+// rejects it as an unknown field.
 
 /** A calendar date in YYYY-MM-DD that exists. */
 export function isDate(v) {
@@ -81,7 +83,11 @@ export function validateManifest(m) {
       if (!["title", "author", "authorUrl", "sourceUrl", "licence", "licenceUrl", "dateChecked", "modified"].includes(key)) problems.push(`${at}: licence has unknown field ${key}`);
     }
     for (const key of ["title", "author", "licence"]) if (!isText(l[key])) problems.push(`${at}: licence.${key} is required`);
-    for (const key of ["authorUrl", "sourceUrl", "licenceUrl"]) if (!isHttpsUrl(l[key])) problems.push(`${at}: licence.${key} must be an https URL`);
+    for (const key of ["authorUrl", "sourceUrl"]) if (!isHttpsUrl(l[key])) problems.push(`${at}: licence.${key} must be an https URL`);
+    // Own work carries no licence URL (ADR 0016; as in jungle-assets); every other licence needs one.
+    if (l.licence === "Own") {
+      if (l.licenceUrl !== undefined) problems.push(`${at}: licence.licenceUrl must be absent for own work`);
+    } else if (!isHttpsUrl(l.licenceUrl)) problems.push(`${at}: licence.licenceUrl must be an https URL`);
     if (!isDate(l.dateChecked)) problems.push(`${at}: licence.dateChecked must be a YYYY-MM-DD date`);
     if (typeof l.modified !== "boolean") problems.push(`${at}: licence.modified must be true or false`);
   });
