@@ -52,6 +52,17 @@ export function creditsHtml(credits) {
   const items = credits.sources
     .map((s) => {
       const files = s.files.map((f) => `<li><code>${escapeHtml(f.name)}</code> (${escapeHtml(f.release)}${f.modified ? ", modified" : ", unmodified"})</li>`).join("");
+      // Own work (ADR 0016; WO-051): "Own work by <author>, generated with <tool> <version>", where an
+      // own-work entry's title names its tool and version and its sourceUrl is this public repository;
+      // no licence link (own work has none).
+      if (s.licence === "Own") {
+        return [
+          "<li>",
+          `<p>Own work by <a href="${escapeHtml(s.authorUrl)}">${escapeHtml(s.author)}</a>, generated with <a href="${escapeHtml(s.sourceUrl)}">${escapeHtml(s.title)}</a>.</p>`,
+          `<ul>${files}</ul>`,
+          "</li>",
+        ].join("");
+      }
       return [
         "<li>",
         `<p><a href="${escapeHtml(s.sourceUrl)}">${escapeHtml(s.title)}</a> by <a href="${escapeHtml(s.authorUrl)}">${escapeHtml(s.author)}</a>, `,

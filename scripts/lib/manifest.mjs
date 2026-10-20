@@ -1,6 +1,12 @@
 // Copy of kudratsingh/jungle-assets pipeline/lib/manifest.mjs: the release manifest contract, checked
 // again here before a release's files are deployed. Change both (and the portfolio's
-// src/lib/world/manifest.ts) together.
+// src/lib/world/manifest.ts) together. One difference on purpose: jungle-assets accepts a file's
+// `deliveryPath` (WO-051) for its private manifest; a jungle-world release never carries one, so this copy
+// rejects it as an unknown field. And, as the last gate before the public, this copy also enforces the
+// runtime allowlist (refusing LicenseRef-Paid until the first-purchase ADR), the forbidden licences and the
+// own-work rules, which jungle-assets checks in its ledger.
+
+import { OWN_AUTHOR, OWN_REPO_PATH, OWN_TITLE, RUNTIME_ALLOWLIST, isForbidden, isOwnSourceUrl, licenceInfo } from "./licences.mjs";
 
 /** A calendar date in YYYY-MM-DD that exists. */
 export function isDate(v) {
@@ -81,7 +87,23 @@ export function validateManifest(m) {
       if (!["title", "author", "authorUrl", "sourceUrl", "licence", "licenceUrl", "dateChecked", "modified"].includes(key)) problems.push(`${at}: licence has unknown field ${key}`);
     }
     for (const key of ["title", "author", "licence"]) if (!isText(l[key])) problems.push(`${at}: licence.${key} is required`);
-    for (const key of ["authorUrl", "sourceUrl", "licenceUrl"]) if (!isHttpsUrl(l[key])) problems.push(`${at}: licence.${key} must be an https URL`);
+    for (const key of ["authorUrl", "sourceUrl"]) if (!isHttpsUrl(l[key])) problems.push(`${at}: licence.${key} must be an https URL`);
+    // Own work carries no licence URL (ADR 0016; as in jungle-assets); every other licence needs one.
+    if (l.licence === "Own") {
+      if (l.licenceUrl !== undefined) problems.push(`${at}: licence.licenceUrl must be absent for own work`);
+    } else if (!isHttpsUrl(l.licenceUrl)) problems.push(`${at}: licence.licenceUrl must be an https URL`);
+    // The last gate before the public (WO-051): only the runtime allowlist, never a forbidden licence, and
+    // no paid file until the ADR at the first purchase (fail closed, see RUNTIME_ALLOWLIST).
+    if (isForbidden(l.licence, l.licenceUrl)) problems.push(`${at}: licence ${l.licence} (${l.licenceUrl ?? "no URL"}) is never allowed`);
+    else if (l.licence === "LicenseRef-Paid") problems.push(`${at}: paid files are refused here until the ADR at the first purchase (fail closed)`);
+    else if (isText(l.licence) && !RUNTIME_ALLOWLIST.includes(l.licence)) problems.push(`${at}: licence ${l.licence} is outside ${RUNTIME_ALLOWLIST.join(", ")}`);
+    // A CC licence's URL is its canonical page, as jungle-assets and the portfolio require (WO-051).
+    else if (licenceInfo(l.licence)?.url && l.licenceUrl !== licenceInfo(l.licence).url) problems.push(`${at}: licence.licenceUrl for ${l.licence} must be ${licenceInfo(l.licence).url}`);
+    if (l.licence === "Own") {
+      if (l.author !== OWN_AUTHOR) problems.push(`${at}: own work's author must be ${OWN_AUTHOR}`);
+      if (!isOwnSourceUrl(l.sourceUrl)) problems.push(`${at}: own work's sourceUrl must be inside https://github.com${OWN_REPO_PATH}`);
+      if (typeof l.title !== "string" || !OWN_TITLE.test(l.title)) problems.push(`${at}: own work's title must end with its tool's name and version`);
+    }
     if (!isDate(l.dateChecked)) problems.push(`${at}: licence.dateChecked must be a YYYY-MM-DD date`);
     if (typeof l.modified !== "boolean") problems.push(`${at}: licence.modified must be true or false`);
   });
