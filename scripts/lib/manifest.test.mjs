@@ -51,3 +51,10 @@ test("own work: author Kudrat Singh, a sourceUrl inside this repository, a tool 
   assert.deepEqual(validateManifest(manifest({ ...own, sourceUrl: "https://github.com/kudratsingh/jungle-world/tree/main" })), []);
   assert.match(validateManifest(manifest({ ...own, title: "EZ-Tree" })).join(), /title must end with its tool's name and version/);
 });
+
+test("a CC licence's URL must be its canonical page (WO-051)", () => {
+  const by4 = { ...cc0, licence: "CC-BY-4.0", licenceUrl: "https://example.com/whatever" };
+  assert.match(validateManifest(manifest(by4)).join(), /licence\.licenceUrl for CC-BY-4\.0 must be https:\/\/creativecommons\.org\/licenses\/by\/4\.0\//);
+  assert.match(validateManifest(manifest({ ...cc0, licenceUrl: "https://creativecommons.org/licenses/by/4.0/" })).join(), /for CC0-1\.0 must be https:\/\/creativecommons\.org\/publicdomain\/zero\/1\.0\//);
+  assert.match(validateManifest(manifest({ ...by4, licence: "CC-BY-3.0", licenceUrl: "https://creativecommons.org/licenses/by/4.0/" })).join(), /for CC-BY-3\.0 must be/);
+});

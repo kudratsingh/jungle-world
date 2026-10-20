@@ -6,7 +6,7 @@
 // runtime allowlist (refusing LicenseRef-Paid until the first-purchase ADR), the forbidden licences and the
 // own-work rules, which jungle-assets checks in its ledger.
 
-import { OWN_AUTHOR, OWN_REPO_PATH, OWN_TITLE, RUNTIME_ALLOWLIST, isForbidden, isOwnSourceUrl } from "./licences.mjs";
+import { OWN_AUTHOR, OWN_REPO_PATH, OWN_TITLE, RUNTIME_ALLOWLIST, isForbidden, isOwnSourceUrl, licenceInfo } from "./licences.mjs";
 
 /** A calendar date in YYYY-MM-DD that exists. */
 export function isDate(v) {
@@ -97,6 +97,8 @@ export function validateManifest(m) {
     if (isForbidden(l.licence, l.licenceUrl)) problems.push(`${at}: licence ${l.licence} (${l.licenceUrl ?? "no URL"}) is never allowed`);
     else if (l.licence === "LicenseRef-Paid") problems.push(`${at}: paid files are refused here until the ADR at the first purchase (fail closed)`);
     else if (isText(l.licence) && !RUNTIME_ALLOWLIST.includes(l.licence)) problems.push(`${at}: licence ${l.licence} is outside ${RUNTIME_ALLOWLIST.join(", ")}`);
+    // A CC licence's URL is its canonical page, as jungle-assets and the portfolio require (WO-051).
+    else if (licenceInfo(l.licence)?.url && l.licenceUrl !== licenceInfo(l.licence).url) problems.push(`${at}: licence.licenceUrl for ${l.licence} must be ${licenceInfo(l.licence).url}`);
     if (l.licence === "Own") {
       if (l.author !== OWN_AUTHOR) problems.push(`${at}: own work's author must be ${OWN_AUTHOR}`);
       if (!isOwnSourceUrl(l.sourceUrl)) problems.push(`${at}: own work's sourceUrl must be inside https://github.com${OWN_REPO_PATH}`);
