@@ -162,3 +162,14 @@ test("a manifest for another release, or with unknown fields, is rejected", asyn
   await assert.rejects(assembleMutated("unknown-file", (m) => (m.files[0].url = "/x")), /unknown field url/);
   await assert.rejects(assembleMutated("unknown-licence", (m) => (m.files[0].licence.note = "x")), /licence has unknown field note/);
 });
+
+test("assembly refuses a forbidden or a paid file (WO-051: the runtime site fails closed)", async () => {
+  await assert.rejects(
+    assembleMutated("nc-file", (m) => Object.assign(m.files[0].licence, { licence: "CC-BY-NC-4.0", licenceUrl: "https://creativecommons.org/licenses/by-nc/4.0/" })),
+    /is never allowed/,
+  );
+  await assert.rejects(
+    assembleMutated("paid-file", (m) => Object.assign(m.files[0].licence, { licence: "LicenseRef-Paid", licenceUrl: "https://www.fab.com/eula" })),
+    /paid files are refused here/,
+  );
+});

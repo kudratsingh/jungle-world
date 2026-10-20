@@ -2,7 +2,11 @@
 // again here before a release's files are deployed. Change both (and the portfolio's
 // src/lib/world/manifest.ts) together. One difference on purpose: jungle-assets accepts a file's
 // `deliveryPath` (WO-051) for its private manifest; a jungle-world release never carries one, so this copy
-// rejects it as an unknown field.
+// rejects it as an unknown field. And, as the last gate before the public, this copy also enforces the
+// runtime allowlist (refusing LicenseRef-Paid until the first-purchase ADR), the forbidden licences and the
+// own-work rules, which jungle-assets checks in its ledger.
+
+import { OWN_AUTHOR, OWN_REPO_PATH, OWN_TITLE, RUNTIME_ALLOWLIST, isForbidden, isOwnSourceUrl } from "./licences.mjs";
 
 /** A calendar date in YYYY-MM-DD that exists. */
 export function isDate(v) {
@@ -88,6 +92,16 @@ export function validateManifest(m) {
     if (l.licence === "Own") {
       if (l.licenceUrl !== undefined) problems.push(`${at}: licence.licenceUrl must be absent for own work`);
     } else if (!isHttpsUrl(l.licenceUrl)) problems.push(`${at}: licence.licenceUrl must be an https URL`);
+    // The last gate before the public (WO-051): only the runtime allowlist, never a forbidden licence, and
+    // no paid file until the ADR at the first purchase (fail closed, see RUNTIME_ALLOWLIST).
+    if (isForbidden(l.licence, l.licenceUrl)) problems.push(`${at}: licence ${l.licence} (${l.licenceUrl ?? "no URL"}) is never allowed`);
+    else if (l.licence === "LicenseRef-Paid") problems.push(`${at}: paid files are refused here until the ADR at the first purchase (fail closed)`);
+    else if (isText(l.licence) && !RUNTIME_ALLOWLIST.includes(l.licence)) problems.push(`${at}: licence ${l.licence} is outside ${RUNTIME_ALLOWLIST.join(", ")}`);
+    if (l.licence === "Own") {
+      if (l.author !== OWN_AUTHOR) problems.push(`${at}: own work's author must be ${OWN_AUTHOR}`);
+      if (!isOwnSourceUrl(l.sourceUrl)) problems.push(`${at}: own work's sourceUrl must be inside https://github.com${OWN_REPO_PATH}`);
+      if (typeof l.title !== "string" || !OWN_TITLE.test(l.title)) problems.push(`${at}: own work's title must end with its tool's name and version`);
+    }
     if (!isDate(l.dateChecked)) problems.push(`${at}: licence.dateChecked must be a YYYY-MM-DD date`);
     if (typeof l.modified !== "boolean") problems.push(`${at}: licence.modified must be true or false`);
   });

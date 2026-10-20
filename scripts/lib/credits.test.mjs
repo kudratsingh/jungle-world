@@ -46,10 +46,11 @@ test("own work is credited as 'Own work by Kudrat Singh, generated with <tool> <
   const entry = credits.sources.find((s) => s.licence === "Own");
   assert.equal(entry.licenceName, "Own work");
   assert.equal(entry.attributionRequired, false);
-  assert.equal(entry.licenceUrl, undefined);
   const html = creditsHtml(credits);
+  // The own-work line carries no licence link: no "licensed under" in its list item, and no undefined href.
+  const ownItem = html.split("\n").find((line) => line.includes("Own work by"));
+  assert.ok(ownItem && !ownItem.includes("licensed under"), ownItem);
   assert.match(html, /Own work by <a href="https:\/\/github\.com\/kudratsingh">Kudrat Singh<\/a>, generated with <a href="https:\/\/github\.com\/kudratsingh\/jungle-world">EZ-Tree 1\.1\.0<\/a>\./);
   assert.ok(!html.includes('href="undefined"'));
-  assert.ok(!html.includes("licensed under <a href=\"undefined\""));
   assert.match(html, /CC BY 4\.0/);
 });
